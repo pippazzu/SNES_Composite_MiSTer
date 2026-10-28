@@ -58,7 +58,6 @@ module main (
 	input             SUFAMI_SWAP,
 	input       [7:0] CC_DIP,
 
-	input             BLEND,
 	input             PAL,
 	output            HIGH_RES,
 	output            V224_MODE,
@@ -72,6 +71,7 @@ module main (
 	output            VBLANKn,
 	output            HSYNC,
 	output            VSYNC,
+	output            BURST_N,
 	output            HVCNT_ATZERO,
 
 	input       [1:0] JOY1_DI,
@@ -240,7 +240,6 @@ SNES SNES
 	.joy2_p6_in(JOY2_P6_in),
 	.sni_joy(SNI_JOY),
 
-	.blend(BLEND),
 	.pal(PAL),
 	.high_res(HIGH_RES),
 	.field_out(FIELD),
@@ -253,6 +252,7 @@ SNES SNES
 	.vde(VBLANKn),
 	.hsync(HSYNC),
 	.vsync(VSYNC),
+	.burst_n(BURST_N),
 	.hvcnt_atzero(HVCNT_ATZERO),
 
 	.gg_en(GG_EN),

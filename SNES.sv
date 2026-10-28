@@ -46,7 +46,7 @@ wire [3:0] vcopt    = status[38:35];
 reg        en216p;
 reg  [4:0] voff;
 always @(posedge CLK_VIDEO) begin
-	en216p <= ((HDMI_WIDTH == 1920) && (HDMI_HEIGHT == 1080) && !forced_scandoubler && !scale);
+	en216p <= ((HDMI_WIDTH == 1920) && (HDMI_HEIGHT == 1080) && (use_analog || !forced_scandoubler));
 	voff <= (vcopt < 6) ? {vcopt,1'b0} : ({vcopt,1'b0} - 5'd24);
 end
 
@@ -168,14 +168,16 @@ parameter CONF_STR = {
 	"P1,Audio & Video;",
 	"P1-;",
 	"P1o01,Aspect Ratio,Original,Full Screen,[ARC1],[ARC2];",
-	"P1O9B,Scandoubler Fx,None,HQ2x,CRT 25%,CRT 50%,CRT 75%;",
 	"P1-;",
 	"d5P1o7,Vertical Crop,Disabled,216p(5x);",
 	"d5P1o36,Crop Offset,0,2,4,8,10,12,-12,-10,-8,-6,-4,-2;",
 	"P1o89,Scale,Normal,V-Integer,Narrower HV-Integer,Wider HV-Integer;",
-	"P1oA,Force 256px,Off,On;",
+	"D7P1oA,Force 256px,Off,On;",
 	"P1-;",
-	"P1OG,Pseudo Transparency,Blend,Off;",
+	"P1O[60],PPU2 RGB,Multi-chip,Original core;",
+	"P1O[59:58],Composite (NTSC),Off,Budget TV,Premium TV;",
+	"h8P1O[63:61],Comp. Brightness,Japan,USA,More,Much More,Too Much;",
+	"h8P1O[65:64],Comp. Sharpness,Off,Low,Medium,High;",
 	"P1-;",
 	"P1OJK,Stereo Mix,None,25%,50%,100%;", 
 
@@ -227,8 +229,8 @@ parameter CONF_STR = {
 };
 
 wire  [1:0] buttons;
-wire [63:0] status;
-wire [15:0] status_menumask = {ss_allow ,en216p, !GUN_MODE, ~turbo_allow, ~gg_available, ~GSU_ACTIVE, ~bk_ena};
+wire [127:0] status;
+wire [15:0] status_menumask = {use_composite, use_analog, ss_allow ,en216p, !GUN_MODE, ~turbo_allow, ~gg_available, ~GSU_ACTIVE, ~bk_ena};
 wire        forced_scandoubler;
 reg  [31:0] sd_lba;
 reg         sd_rd = 0;
@@ -322,7 +324,6 @@ wire       GSU_TURBO = status[18];
 wire       GSU_FASTROM = ~status[46];
 wire       SUFAMI_SWAP = status[31];
 wire [3:0] CC_TIME = status[57:54];
-wire       BLEND = ~status[16];
 wire [1:0] mouse_mode = status[6:5];
 wire       joy_swap = status[7] | piano;
 wire [2:0] LHRom_type = status[3:1];
@@ -474,7 +475,6 @@ main main
 	.RAM_MASK(ram_mask),
 	.RAM_SIZE(ram_size),
 	.PAL(PAL),
-	.BLEND(BLEND),
 
 	.ROM_ADDR(ROM_ADDR),
 	.ROM_D(ROM_D),
@@ -528,6 +528,7 @@ main main
 	.VBLANKn(VBlank_out),
 	.HSYNC(HSYNC_out),
 	.VSYNC(VSYNC_out),
+	.BURST_N(burst_n_out),
 	.HVCNT_ATZERO(HVCNT_ATZERO),
 
 	.JOY1_DI(JOY1_DI),
@@ -877,6 +878,30 @@ dpram_dif #(BSRAM_BITS,8,BSRAM_BITS-1,16) bsram
 ////////////////////////////  VIDEO  ////////////////////////////////////
 
 wire [7:0] R_out,G_out,B_out;
+wire burst_n_out;
+// NTSC encoding supports every native resolution, including interlace.
+wire use_composite = (status[59:58] != 0) && !PAL && !GUN_MODE;
+wire use_rgb_smear = !status[60] && !GUN_MODE;
+wire use_analog = use_composite || use_rgb_smear;
+wire rgb_pix, rgb_hs, rgb_vs, rgb_hb, rgb_vb, rgb_field, cv_field;
+wire [7:0] rgb_r, rgb_g, rgb_b;
+wire signed [15:0] comp_brightness = status[63:61]==1 ? 16'shFE49 :
+    status[63:61]==2 ? 16'sd292 : status[63:61]==3 ? 16'sd643 :
+    status[63:61]==4 ? 16'sd936 : 16'sd0;
+wire cv_pix, cv_hs, cv_vs, cv_hb, cv_vb;
+wire [7:0] cv_r, cv_g, cv_b;
+snes_composite composite_video (
+    .clk(CLK_VIDEO), .reset(reset),
+    .r(R_out), .g(G_out), .b(B_out),
+    .hs(HSYNC_out), .vs(VSYNC_out), .hde(HBlank_out), .vde(VBlank_out),
+    .burst_n(burst_n_out), .premium(status[59:58] == 2), .field_in(FIELD),
+    .field_out(cv_field), .rgb_field(rgb_field),
+    .brightness(comp_brightness),.sharpness({status[65:64],2'b00}),
+    .rgb_pix(rgb_pix),.rgb_hs(rgb_hs),.rgb_vs(rgb_vs),.rgb_hb(rgb_hb),.rgb_vb(rgb_vb),
+    .rgb_r(rgb_r),.rgb_g(rgb_g),.rgb_b(rgb_b),
+    .pix(cv_pix), .hs_out(cv_hs), .vs_out(cv_vs), .hb_out(cv_hb), .vb_out(cv_vb),
+    .r_out(cv_r), .g_out(cv_g), .b_out(cv_b)
+);
 wire HSYNC_out;
 wire VSYNC_out;
 wire HBlank_out;
@@ -931,22 +956,28 @@ always @(posedge CLK_VIDEO) begin
 	if(pcnt==3) {HSync, VSync} <= {HSYNC, VSYNC};
 end
 
-assign VGA_F1 = interlace & FIELD;
-assign VGA_SL = {~interlace,~interlace}&sl[1:0];
+assign VGA_F1 = use_composite ? (INTERLACE & cv_field) :
+    use_rgb_smear ? (INTERLACE & rgb_field) : (interlace & FIELD);
+assign VGA_SL = 2'd0;
 
-wire [2:0] scale = status[11:9];
-wire [2:0] sl = scale ? scale - 1'd1 : 3'd0;
-wire       scandoubler = ~interlace && (scale || forced_scandoubler);
+// The core scandoubler (Scandoubler Fx/HQ2x/scanlines) is removed; status[11:9]
+// is unused. 31 kHz VGA comes only from the MiSTer vga_scaler path.
+wire       scandoubler = 1'b0;
 
-video_mixer #(.LINE_LENGTH(520), .GAMMA(1)) video_mixer
+video_mixer #(.LINE_LENGTH(640), .GAMMA(1)) video_mixer
 (
 	.*,
-	.hq2x(scale==1),
+	.hq2x(1'b0),
 	.freeze_sync(),
+    .ce_pix(use_composite ? cv_pix : use_rgb_smear ? rgb_pix : ce_pix),
+    .HSync(use_composite ? cv_hs : use_rgb_smear ? rgb_hs : HSync),
+    .VSync(use_composite ? cv_vs : use_rgb_smear ? rgb_vs : VSync),
+    .HBlank(use_composite ? cv_hb : use_rgb_smear ? rgb_hb : HBlank),
+    .VBlank(use_composite ? cv_vb : use_rgb_smear ? rgb_vb : VBlank),
 	.VGA_DE(vga_de),
-	.R((LG_TARGET && GUN_MODE && (!status[29] | LG_T)) ? {8{LG_TARGET[0]}} : R),
-	.G((LG_TARGET && GUN_MODE && (!status[29] | LG_T)) ? {8{LG_TARGET[1]}} : G),
-	.B((LG_TARGET && GUN_MODE && (!status[29] | LG_T)) ? {8{LG_TARGET[2]}} : B)
+	.R((LG_TARGET && GUN_MODE && (!status[29] | LG_T)) ? {8{LG_TARGET[0]}} : (use_composite ? cv_r : use_rgb_smear ? rgb_r : R)),
+	.G((LG_TARGET && GUN_MODE && (!status[29] | LG_T)) ? {8{LG_TARGET[1]}} : (use_composite ? cv_g : use_rgb_smear ? rgb_g : G)),
+	.B((LG_TARGET && GUN_MODE && (!status[29] | LG_T)) ? {8{LG_TARGET[2]}} : (use_composite ? cv_b : use_rgb_smear ? rgb_b : B))
 );
 
 ////////////////////////////  I/O PORTS  ////////////////////////////////

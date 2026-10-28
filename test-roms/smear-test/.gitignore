@@ -1,0 +1,4 @@
+src/data.bin
+src/pages.inc
+src/*.o
+src/smeartest.sfc

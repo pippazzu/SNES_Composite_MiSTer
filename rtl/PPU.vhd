@@ -32,7 +32,6 @@ entity SPPU is
 		EXTLATCH		: in std_logic;
 		
 		PAL			: in std_logic;
-		BLEND			: in std_logic;
 
 		HIGH_RES		: out std_logic;
 		DOTCLK		: out std_logic;
@@ -51,6 +50,7 @@ entity SPPU is
 		
 		HSYNC			: out std_logic;
 		VSYNC			: out std_logic;
+		BURST_N         : out std_logic;
 		HDE 			: out std_logic;
 		VDE 			: out std_logic;
 		HVCNT_ATZERO	: out std_logic;
@@ -2435,11 +2435,7 @@ begin
 					end if;
 					PREV_COLOR <= COLOR;
 
-					if PSEUDOHIRES = '1' and BLEND = '1' then
-						MATH_R := AddSub(unsigned(COLOR(4 downto 0) and COLOR_MASK), unsigned(PREV_COLOR(4 downto 0) and COLOR_MASK),  '1', '1');
-						MATH_G := AddSub(unsigned(COLOR(9 downto 5) and COLOR_MASK), unsigned(PREV_COLOR(9 downto 5) and COLOR_MASK), '1', '1');
-						MATH_B := AddSub(unsigned(COLOR(14 downto 10) and COLOR_MASK), unsigned(PREV_COLOR(14 downto 10) and COLOR_MASK), '1', '1');
-					elsif (MATH_EN = '1' and SUB_EN = '1') or MATH_RESET(0) /= '0' then
+					if (MATH_EN = '1' and SUB_EN = '1') or MATH_RESET(0) /= '0' then
 						if SUB_MATH_EN = '1' then
 							MATH_R := AddSub(unsigned(COLOR(4 downto 0) and COLOR_MASK), unsigned(PREV_COLOR(4 downto 0)), not CGADSUB(7), HALF);
 							MATH_G := AddSub(unsigned(COLOR(9 downto 5) and COLOR_MASK), unsigned(PREV_COLOR(9 downto 5)), not CGADSUB(7), HALF);
@@ -2466,7 +2462,7 @@ begin
 						MATH_MAIN_G <= MATH_G;
 						MATH_MAIN_B <= MATH_B;
 	
-						if HIRES = '1' or (PSEUDOHIRES = '1' and BLEND = '0') then
+						if HIRES = '1' or PSEUDOHIRES = '1' then
 							MATH_SUB_R <= SUB_R;
 							MATH_SUB_G <= SUB_G;
 							MATH_SUB_B <= SUB_B;
@@ -2538,11 +2534,15 @@ end process;
 COLOR_OUT <= (others => '0') when BG_FORCE_BLANK = '1' else
              BRIGHT_SUB_B  & BRIGHT_SUB_G  & BRIGHT_SUB_R when DOT_CLK = '1' else
 				 BRIGHT_MAIN_B & BRIGHT_MAIN_G & BRIGHT_MAIN_R;
+-- Provisional horizontal placement: 15 dots starting at the second long
+-- dot, 327. Duration follows the PPU dot counter (including short lines).
+-- Confirm absolute phase/placement against a hardware trace before release.
+BURST_N <= '0' when H_CNT >= 327 or H_CNT < 2 else '1';
 DOTCLK <= DOT_CLK;
 HBLANK <= IN_HBL;
 VBLANK <= IN_VBL;
 
-HIGH_RES <= HIRES or (PSEUDOHIRES and not BLEND);
+HIGH_RES <= HIRES or PSEUDOHIRES;
 V224 <= not OVERSCAN;
 FIELD_OUT <= FIELD;
 INTERLACE <= BGINTERLACE;

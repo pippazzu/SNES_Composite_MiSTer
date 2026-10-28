@@ -29,3 +29,12 @@ set_global_assignment -name SYSTEMVERILOG_FILE rtl/sni.sv
 set_global_assignment -name SYSTEMVERILOG_FILE rtl/uart.sv
 set_global_assignment -name SDC_FILE SNES.sdc
 set_global_assignment -name SYSTEMVERILOG_FILE SNES.sv
+
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/composite/ba6592f.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/composite/snes_av_board.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/composite/snes_composite.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/composite/composite_decoder.sv
+
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/composite/snes_ppu2_rgb.sv
+
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/composite/snes_rgb_output.sv

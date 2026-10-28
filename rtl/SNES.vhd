@@ -14,7 +14,6 @@ entity SNES is
 		RST_N			: in std_logic;
 		ENABLE		: in std_logic;
 		PAL			: in std_logic;
-		BLEND			: in std_logic;
 		
 		CA       	: out std_logic_vector(23 downto 0);
 		CPURD_N		: out std_logic;
@@ -70,6 +69,7 @@ entity SNES is
 		VDE			: out std_logic;
 		HSYNC			: out std_logic;
 		VSYNC			: out std_logic;
+		BURST_N         : out std_logic;
 		HVCNT_ATZERO	: out std_logic;
 
 		JOY1_DI		: in std_logic_vector(1 downto 0);
@@ -339,7 +339,6 @@ begin
 		
 		EXTLATCH		=> JPIO67(7) and JOY2_P6_in,
 		
-		BLEND			=> BLEND,
 		PAL			=> PAL,
 		HIGH_RES		=> HIGH_RES,
 		DOTCLK		=> DOTCLK,
@@ -354,6 +353,7 @@ begin
 		VDE			=> VDE,
 		HSYNC			=> HSYNC,
 		VSYNC			=> VSYNC,
+		BURST_N         => BURST_N,
 		HVCNT_ATZERO	=> HVCNT_ATZERO,
 
 		BG_EN			=> DBG_BG_EN,

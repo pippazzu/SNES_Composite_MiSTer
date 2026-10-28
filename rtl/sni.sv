@@ -59,6 +59,11 @@ module sni(
 	reg[23:0] addr;
 	wire rom_sel	= addr[23:21] != 3'h7;
 	wire wram_sel	= (addr[23:16] == 8'hF5 || addr[23:16] == 8'hF6);
+	// Update the external bank select with the address, so SDRAM arbitration
+	// receives a registered decode without adding a request or address cycle.
+	reg sdram_wram_sel;
+	wire [23:0] addr_plus_one = addr + 24'd1;
+	wire next_wram_sel = addr_plus_one[23:16] == 8'hF5 || addr_plus_one[23:16] == 8'hF6;
 	wire sdram_sel	= rom_sel | wram_sel;
 	wire joypad_sel = (addr[23:4] == 20'hF9071 && addr[3] == 1'b1);
 	wire bsram_sel	= (addr[23:20] == 4'hE);
@@ -68,7 +73,7 @@ module sni(
 	assign sdram_rd_req = rd_req;
 	assign sdram_wr_req = wr_req;
 
-	assign sdram_addr = wram_sel ? {1'b1, 7'h0, wram_addr} : {1'b0,addr};
+	assign sdram_addr = sdram_wram_sel ? {1'b1, 7'h0, wram_addr} : {1'b0,addr};
 	assign sdram_data = inbuffer_rdata;
 	assign bsram_addr = addr[19:0];
 	assign bsram_data = inbuffer_rdata;
@@ -125,6 +130,7 @@ module sni(
 
 		if (reset) begin
 			addr <= 24'b0;
+			sdram_wram_sel <= 1'b0;
 			len <= 8'b0;
 			inbuffer_raddr <= 9'h000;
 			inbuffer_waddr <= 9'h000;
@@ -177,7 +183,10 @@ module sni(
 						end
 						STATE_ADDR+0: addr[7:0]   <= inbuffer_rdata;
 						STATE_ADDR+1: addr[15:8]  <= inbuffer_rdata;
-						STATE_ADDR+2: addr[23:16] <= inbuffer_rdata;
+						STATE_ADDR+2: begin
+							addr[23:16] <= inbuffer_rdata;
+							sdram_wram_sel <= inbuffer_rdata == 8'hF5 || inbuffer_rdata == 8'hF6;
+						end
 						STATE_LEN+0: begin
 							len <= inbuffer_rdata;
 							tdata_i <= 1'b1;
@@ -218,6 +227,7 @@ module sni(
 						if ((!sdram_sel || (sdram_busy && sdram_ready)) && 
 							(!bsram_sel || (bsram_wr_ && bsram_ready))) begin
 							addr <= addr + 24'b1;
+							sdram_wram_sel <= next_wram_sel;
 							len <= len - 1'b1;
 							sdram_busy <= 1'b0;
 							inbuffer_raddr <= inbuffer_raddr + 1'b1;
@@ -237,6 +247,7 @@ module sni(
 
 						// Use blocking assignments so that the if statement below can issue another SDRAM read
 						// request immediately, allowing read requests to be pipelined with UART transmissionss.
+						sdram_wram_sel <= next_wram_sel;
 						addr = addr + 24'b1;
 						len = len - 1'b1;
 						sdram_busy = 1'b0;
