@@ -30,14 +30,22 @@ module snes_av_board (
     wire signed [19:0] vo_rel = vpin - VO_DC;
     wire signed [18:0] vo_pin = vo_rel[18:0];
     wire signed [38:0] vp = vo_pin * 18'sd62244 + vf * 18'sd367;
+    wire signed [18:0] vf_next = vp >>> 16;
+    // 75 ohm receiver behind the composite output's 56 ohm resistor.
+    // Registered from vf's next value, so jack always equals the termination
+    // of the current vf: no added latency, but the decoder no longer sees
+    // this multiplier in its sync-tip cycle.
+    wire signed [37:0] terminated = vf_next * 18'sd37521;
+    reg signed [18:0] jack;
     always @(posedge clk) begin
-        if(reset) begin rf<=0; bf<=0; yf<=0; vf<=0; vpin<=VO_DC; end
+        if(reset) begin rf<=0; bf<=0; yf<=0; vf<=0; vpin<=VO_DC; jack<=0; end
         else begin
             vpin <= vo_abs > vdecay ? vo_abs : vdecay;
             rf <= rf + (rp >>> 16);
             bf <= bf + (bp >>> 16);
             yf <= yp >>> 16;
-            vf <= vp >>> 16;
+            vf <= vf_next;
+            jack <= terminated >>> 16;
         end
     end
     assign ryi = rf;
@@ -45,8 +53,5 @@ module snes_av_board (
     // Feedback is taken at Q11's emitter BEFORE C59 and R42. R40/R41
     // divide by two; the external S-video termination is not in this loop.
     assign yi = yf >>> 1;
-    // 75 ohm receiver behind the composite output's 56 ohm resistor.
-    wire signed [37:0] terminated = vf * 18'sd37521;
-    wire signed [18:0] jack = terminated >>> 16;
     assign cvbs = $signed(jack) <<< 5;
 endmodule
