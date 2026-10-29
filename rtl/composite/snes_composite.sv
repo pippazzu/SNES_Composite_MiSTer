@@ -14,13 +14,13 @@ module snes_composite (
     output wire [7:0] r_out, g_out, b_out
 );
     wire signed [18:0] ar, ag, ab;
-    wire sync_n, gate_n;
+    wire sync_n, gate_n, src_pix2;
     wire [3:0] phase;
     snes_rgb_output source(
         .clk(clk),.reset(reset),.r(r),.g(g),.b(b),
         .hs(hs),.vs(vs),.hde(hde),.vde(vde),.burst_n(burst_n),.field_in(field_in),
         .ar(ar),.ag(ag),.ab(ab),.sync_n(sync_n),.gate_n(gate_n),.phase(phase),
-        .pix(rgb_pix),.hs_out(rgb_hs),.vs_out(rgb_vs),.hb_out(rgb_hb),.vb_out(rgb_vb),.field_out(rgb_field),
+        .pix(rgb_pix),.pix2(src_pix2),.hs_out(rgb_hs),.vs_out(rgb_vs),.hb_out(rgb_hb),.vb_out(rgb_vb),.field_out(rgb_field),
         .r_out(rgb_r),.g_out(rgb_g),.b_out(rgb_b));
     wire signed [18:0] yo,ryo,byo,vo,co,yi,ryi,byi;
     wire signed [23:0] cvbs;
@@ -47,7 +47,10 @@ module snes_composite (
     // still recovers burst/clamp internally; it does not redefine picture rows.
     // Nominal notch-luma center is 30 source samples from raw pins (including
     // the VO pin register): the shared RGB presentation has three, so delay
-    // that complete timing tuple by 27.
+    // that complete timing tuple by 27. The decoded picture is taken every
+    // second sample (21.48 MHz, six per subcarrier cycle), not every fourth
+    // like the RGB presentation: at three per cycle the scaler cannot draw
+    // decoded composite. The old pixels are among the new ones.
     localparam integer PRESENT_DELAY=27;
     reg [5:0] timing [0:PRESENT_DELAY-1];
     integer i;
@@ -55,7 +58,7 @@ module snes_composite (
         if(reset) begin
             for(i=0;i<PRESENT_DELAY;i=i+1) timing[i]<=6'b000110;
         end else begin
-            timing[0]<={rgb_pix,rgb_hs,rgb_vs,rgb_hb,rgb_vb,rgb_field};
+            timing[0]<={src_pix2,rgb_hs,rgb_vs,rgb_hb,rgb_vb,rgb_field};
             for(i=1;i<PRESENT_DELAY;i=i+1) timing[i]<=timing[i-1];
         end
     end

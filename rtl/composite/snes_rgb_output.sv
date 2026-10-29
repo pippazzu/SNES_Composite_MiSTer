@@ -9,6 +9,7 @@ module snes_rgb_output (
     output wire sync_n, gate_n,
     output wire [3:0] phase,
     output reg pix, hs_out, vs_out, hb_out, vb_out, field_out,
+    output reg pix2,   // every second clock, pix included: the composite pixel
     output reg [7:0] r_out, g_out, b_out
 );
     reg [7:0] rp, gp, bp;
@@ -43,13 +44,14 @@ module snes_rgb_output (
     reg hs_old;
     always @(posedge clk) begin
         if(reset) begin
-            pixel_count<=0;hs_old<=0;pix<=0;
+            pixel_count<=0;hs_old<=0;pix<=0;pix2<=0;
             hs_out<=0;vs_out<=0;hb_out<=1;vb_out<=1;field_out<=0;
             r_out<=0;g_out<=0;b_out<=0;
         end else begin
             hs_old<=hp[1];
             pixel_count<=hp[1] && !hs_old ? 2'd0 : pixel_count+2'd1;
             pix<=pixel_count==3;
+            pix2<=pixel_count[0];
             r_out<=rq[28:21];g_out<=gq[28:21];b_out<=bq[28:21];
             hs_out<=hp[1];vs_out<=vp[1];hb_out<=~hd[1];vb_out<=~vd[1];field_out<=fields[1];
         end

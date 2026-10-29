@@ -964,20 +964,49 @@ assign VGA_SL = 2'd0;
 // is unused. 31 kHz VGA comes only from the MiSTer vga_scaler path.
 wire       scandoubler = 1'b0;
 
-video_mixer #(.LINE_LENGTH(640), .GAMMA(1)) video_mixer
+// Gamma before the mixer: composite pixels come every two clocks, faster than
+// video_mixer's gamma_corr (one lookup per clock, three per pixel) can follow.
+// gamma_fast looks up R, G and B at once, with the same curve and the same
+// one-pixel delay.
+wire       vm_ce = use_composite ? cv_pix : use_rgb_smear ? rgb_pix : ce_pix;
+wire       g_hs, g_vs, g_hb, g_vb;
+wire [7:0] g_r, g_g, g_b;
+gamma_fast gamma
+(
+	.clk_vid   (CLK_VIDEO),
+	.ce_pix    (vm_ce),
+	.gamma_bus (gamma_bus),
+	.HSync     (use_composite ? cv_hs : use_rgb_smear ? rgb_hs : HSync),
+	.VSync     (use_composite ? cv_vs : use_rgb_smear ? rgb_vs : VSync),
+	.HBlank    (use_composite ? cv_hb : use_rgb_smear ? rgb_hb : HBlank),
+	.VBlank    (use_composite ? cv_vb : use_rgb_smear ? rgb_vb : VBlank),
+	.DE        (1'b0),
+	.RGB_in    ((LG_TARGET && GUN_MODE && (!status[29] | LG_T)) ? {{8{LG_TARGET[0]}}, {8{LG_TARGET[1]}}, {8{LG_TARGET[2]}}} :
+	            use_composite ? {cv_r, cv_g, cv_b} : use_rgb_smear ? {rgb_r, rgb_g, rgb_b} : {R, G, B}),
+	.HSync_out (g_hs),
+	.VSync_out (g_vs),
+	.HBlank_out(g_hb),
+	.VBlank_out(g_vb),
+	.DE_out    (),
+	.RGB_out   ({g_r, g_g, g_b})
+);
+
+wire [21:0] vm_gamma_bus;
+video_mixer #(.LINE_LENGTH(640), .GAMMA(0)) video_mixer
 (
 	.*,
+	.gamma_bus(vm_gamma_bus),
 	.hq2x(1'b0),
 	.freeze_sync(),
-    .ce_pix(use_composite ? cv_pix : use_rgb_smear ? rgb_pix : ce_pix),
-    .HSync(use_composite ? cv_hs : use_rgb_smear ? rgb_hs : HSync),
-    .VSync(use_composite ? cv_vs : use_rgb_smear ? rgb_vs : VSync),
-    .HBlank(use_composite ? cv_hb : use_rgb_smear ? rgb_hb : HBlank),
-    .VBlank(use_composite ? cv_vb : use_rgb_smear ? rgb_vb : VBlank),
+	.ce_pix(vm_ce),
+	.HSync(g_hs),
+	.VSync(g_vs),
+	.HBlank(g_hb),
+	.VBlank(g_vb),
 	.VGA_DE(vga_de),
-	.R((LG_TARGET && GUN_MODE && (!status[29] | LG_T)) ? {8{LG_TARGET[0]}} : (use_composite ? cv_r : use_rgb_smear ? rgb_r : R)),
-	.G((LG_TARGET && GUN_MODE && (!status[29] | LG_T)) ? {8{LG_TARGET[1]}} : (use_composite ? cv_g : use_rgb_smear ? rgb_g : G)),
-	.B((LG_TARGET && GUN_MODE && (!status[29] | LG_T)) ? {8{LG_TARGET[2]}} : (use_composite ? cv_b : use_rgb_smear ? rgb_b : B))
+	.R(g_r),
+	.G(g_g),
+	.B(g_b)
 );
 
 ////////////////////////////  I/O PORTS  ////////////////////////////////
