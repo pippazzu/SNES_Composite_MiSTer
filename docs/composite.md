@@ -42,4 +42,4 @@ With a 4.7 µs sync and standard NTSC timing, the decoder gives the same picture
 
 ## Build
 
-Quartus 17.0.2 Lite, seed 8. Logic 35,510 ALMs (85%), DSP blocks 110/112, RAM blocks 530/553 (96%). Worst setup slack is +0.018 ns and hold slack +0.243 ns at the slow 100 °C corner the MiSTer flow signs off on, so timing passes. Removing the scandoubler, HQ2x and the core's scanline effects frees 25 memory blocks.
+Quartus 17.0.2 Lite, seed 2. Logic 35,551 ALMs (85%), DSP blocks 110/112, RAM blocks 530/553 (96%). Worst setup slack is +0.046 ns and hold slack +0.246 ns at the slow 100 °C corner the MiSTer flow signs off on, so timing passes. Removing the scandoubler, HQ2x and the core's scanline effects frees 25 memory blocks.
